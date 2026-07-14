@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import { GiftedChat } from "react-native-gifted-chat";
-import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
-import { View, Text } from 'react-native'; // Added View and Text for the timer display
+import { SafeAreaView, SafeAreaProvider } from "react-native-safe-area-context";
+import { View, Text } from "react-native";
 
 const CHATBOT_USER_OBJ = {
   _id: 2,
@@ -9,67 +9,155 @@ const CHATBOT_USER_OBJ = {
   avatar: "https://loremflickr.com/140/140",
 };
 
-const triviaQuestionAlex = [
-  {
-    design: {
-      teaching: "cole, rachel, jon",
-      scholars: "abigail, cassandra, christopher, ezra, geronimo, katelyn, kenner, lionell, lohana, matthew, jaelin, rafael, sam, isa, vita"
-    },
-    storytelling: {
-      teaching: "sterling, giovanna, jacob",
-      scholars: "daniel, vivian, diana, lezette, hadassah, christopher, nicholas, ben, jasmine, desimond, alexandra, darius, devin, joshua, daniel"
-    },
-    lens: {
-      teaching: "jiashi, ben, francesca",
-      scholars: "ajax, anthony, carlos, connor, devin, emily, hannah, nghi, niekelle, tayo, reece, shawn, steven, vahan"
-    },
-    engineering: {
-      teaching: "alexis, edward, ricardo",
-      scholars: "abigail, alexander, alex, kritika, shawn, viola, keziah, ryan, sabrina, vaughn, jade, jackie, jae, jair, melissa"
-    }
-  }
-];
+const cohortData = {
+  design: {
+    teaching: ["cole", "rachel", "jon"],
+    scholars: [
+      "abigail",
+      "cassandra",
+      "christopher",
+      "ezra",
+      "geronimo",
+      "katelyn",
+      "kenner",
+      "lionell",
+      "lohana",
+      "matthew",
+      "jaelin",
+      "rafael",
+      "sam",
+      "isa",
+      "vita",
+    ],
+  },
+  storytelling: {
+    teaching: ["sterling", "giovanna", "jacob"],
+    scholars: [
+      "daniel",
+      "vivian",
+      "diana",
+      "lezette",
+      "hadassah",
+      "christopher",
+      "nicholas",
+      "ben",
+      "jasmine",
+      "desimond",
+      "alexandra",
+      "darius",
+      "devin",
+      "joshua",
+    ],
+  },
+  lens: {
+    teaching: ["jiashi", "ben", "francesca"],
+    scholars: [
+      "ajax",
+      "anthony",
+      "carlos",
+      "connor",
+      "devin",
+      "emily",
+      "hannah",
+      "nghi",
+      "niekelle",
+      "tayo",
+      "reece",
+      "shawn",
+      "steven",
+      "vahan",
+    ],
+  },
+  engineering: {
+    teaching: ["alexis", "edward", "ricardo"],
+    scholars: [
+      "abigail",
+      "alexander",
+      "alex",
+      "kritika",
+      "shawn",
+      "viola",
+      "keziah",
+      "ryan",
+      "sabrina",
+      "vaughn",
+      "jade",
+      "jackie",
+      "jae",
+      "jair",
+      "melissa",
+    ],
+  },
+};
 
-const gameSteps = [
-  { track: "storytelling", role: "teaching", prompt: "Name a TEACHING member in Storytelling!" },
-  { track: "storytelling", role: "scholars", prompt: "Name a SCHOLAR in Storytelling!" },
-  { track: "lens", role: "teaching", prompt: "Name a TEACHING member in Lens!" },
-  { track: "lens", role: "scholars", prompt: "Name a SCHOLAR in Lens!" },
-  { track: "engineering", role: "teaching", prompt: "Name a TEACHING member in Engineering!" },
-  { track: "engineering", role: "scholars", prompt: "Name a SCHOLAR in Engineering!" },
-];
+const cohortOptions = Object.keys(cohortData);
 
 export default function App() {
   const [messages, setMessages] = useState([]);
-  const [gameState, setGameState] = useState(-1); 
-  
-  // Timer States
-  const [timeLeft, setTimeLeft] = useState(120); // 120 seconds = 2 minutes
-  const timerRef = useRef(null); // Keeps track of our active interval reference
+  const [gameState, setGameState] = useState(-1);
+  const [selectedCohort, setSelectedCohort] = useState("");
+  const [score, setScore] = useState(0);
+  const [guessedNames, setGuessedNames] = useState([]);
+  const [timeLeft, setTimeLeft] = useState(120);
+  const timerRef = useRef(null);
 
-  useEffect(() => {
-    if (messages.length < 1) {
-      addBotMessage("Hello, welcome to simple trivia! Say 'Yes' when you're ready to play! You will have 2 minutes.");
-    }
-    // Clean up timer when component unmounts
-    return () => clearInterval(timerRef.current);
-  }, []);
+  const addNewMessage = (newMessages) => {
+    setMessages((previousMessages) => GiftedChat.append(previousMessages, newMessages));
+  };
 
-  // Listen to timer countdown changes
-  useEffect(() => {
-    if (timeLeft === 0 && gameState !== -1) {
-      // Time is up! 
-      clearInterval(timerRef.current);
-      setGameState(-1);
-      addBotMessage("⏰ Time's up! You couldn't finish in 2 minutes. Game Over! ❌\n\nSay 'Yes' to try again.");
+  const addBotMessage = (text) => {
+    addNewMessage([
+      {
+        _id: Math.round(Math.random() * 1000000),
+        text,
+        createdAt: new Date(),
+        user: CHATBOT_USER_OBJ,
+      },
+    ]);
+  };
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
+  };
+
+  const getCohortNames = (cohortName) => {
+    const cohort = cohortData[cohortName];
+    if (!cohort) return [];
+    return [...cohort.teaching, ...cohort.scholars].map((name) => name.trim().toLowerCase());
+  };
+
+  const getCohortNameCount = (cohortName) => getCohortNames(cohortName).length;
+
+  const getFinalFeedback = (currentScore, totalNames) => {
+    if (currentScore === 18 && totalNames === 18) {
+      return "Good job! You're a superstar and know everyone's names!";
     }
-  }, [timeLeft, gameState]);
+
+    if (currentScore >= 10 && currentScore <= 17) {
+      return "Amazing! You're almost there. Try getting to know everyone better!";
+    }
+
+    return "You'll do better next time! Try speaking to everyone and collaborate with someone you haven't yet.";
+  };
+
+  const finishRound = (finalScore, totalNames, reason = "time") => {
+    clearInterval(timerRef.current);
+    setGameState(-1);
+
+    const feedback = getFinalFeedback(finalScore, totalNames);
+    const headline = reason === "complete" ? "🎉 Round complete!" : "⏰ Time's up!";
+
+    addBotMessage(
+      `${headline} You scored ${finalScore} out of ${totalNames} names for ${selectedCohort}. ${feedback} Say a cohort name to play again.`
+    );
+  };
 
   const startTimer = () => {
-    // Clear any lingering timer just in case
-    clearInterval(timerRef.current); 
-    setTimeLeft(120); // Reset clock to 2 minutes
-    
+    clearInterval(timerRef.current);
+    setTimeLeft(120);
+
     timerRef.current = setInterval(() => {
       setTimeLeft((prevTime) => {
         if (prevTime <= 1) {
@@ -81,60 +169,75 @@ export default function App() {
     }, 1000);
   };
 
-  const addNewMessage = (newMessages) => {
-    setMessages((previousMessages) => GiftedChat.append(previousMessages, newMessages));
-  };
+  useEffect(() => {
+    if (messages.length < 1) {
+      addBotMessage(
+        "Welcome! Choose a cohort: design, lens, engineering, or storytelling. You have 2 minutes to list as many names as you can, including the teaching team."
+      );
+    }
 
-  const addBotMessage = (text) => {
-    addNewMessage([
-      {
-        _id: Math.round(Math.random() * 1000000),
-        text: text,
-        createdAt: new Date(),
-        user: CHATBOT_USER_OBJ,
-      },
-    ]);
-  };
+    return () => clearInterval(timerRef.current);
+  }, []);
+
+  useEffect(() => {
+    if (timeLeft === 0 && gameState === 0) {
+      const totalNames = getCohortNameCount(selectedCohort);
+      finishRound(score, totalNames, "time");
+    }
+  }, [timeLeft, gameState, score, selectedCohort]);
 
   const respondToUser = (userMessages) => {
-    const userText = userMessages[0].text.trim().toLowerCase(); 
+    const userText = userMessages[0].text.trim().toLowerCase();
 
-    // LOBBY STATE
     if (gameState === -1) {
-      if (userText === "yes") {
+      if (cohortOptions.includes(userText)) {
+        setMessages([]);
+        setSelectedCohort(userText);
+        setScore(0);
+        setGuessedNames([]);
         setGameState(0);
-        setMessages([]); 
-        startTimer(); // <-- Start the clock right here!
-        addBotMessage("Let's begin!\n\nQuestion 1: " + gameSteps[0].prompt);
+        startTimer();
+        addBotMessage(
+          `Let's go! You chose ${userText}. List as many names as you can from ${userText}, including the teaching team. Type names one by one or separate them with commas. You have 2 minutes!`
+        );
+      } else if (userText === "yes" || userText === "start") {
+        addBotMessage("Choose a cohort: design, lens, engineering, or storytelling.");
       } else {
-        addBotMessage("Please say 'Yes' when you are ready to play!");
+        addBotMessage("Choose a cohort to begin: design, lens, engineering, or storytelling.");
       }
       return;
     }
 
-    // GAMEPLAY STATE
-    if (gameState >= 0 && gameState < gameSteps.length) {
-      // If time ran out before the timeout delay finished execution, don't allow processing answers
+    if (gameState === 0) {
       if (timeLeft <= 0) return;
 
-      const currentStep = gameSteps[gameState];
-      const rawString = triviaQuestionAlex[0][currentStep.track][currentStep.role];
-      const validAnswers = rawString.split(",").map(name => name.trim().toLowerCase());
+      const cohortNames = getCohortNames(selectedCohort);
+      const guessedWords = userText
+        .split(/[^a-z]+/)
+        .filter(Boolean);
+      const newMatches = guessedWords.filter(
+        (word) => cohortNames.includes(word) && !guessedNames.includes(word)
+      );
 
-      if (validAnswers.includes(userText)) {
-        const nextState = gameState + 1;
-        
-        if (nextState < gameSteps.length) {
-          setGameState(nextState);
-          addBotMessage(`🎉 Correct! ${userMessages[0].text} is on the team.\n\nQuestion ${nextState + 1}: ${gameSteps[nextState].prompt}`);
-        } else {
-          // Finished the final question!
-          clearInterval(timerRef.current); // <-- Stop the clock, they won!
-          setGameState(-1); 
-          addBotMessage(`🏆 Amazing job! You beat the clock with ${formatTime(timeLeft)} left! You win!\n\nSay 'Yes' if you want to play again.`);
+      if (newMatches.length > 0) {
+        const updatedGuessedNames = [...new Set([...guessedNames, ...newMatches])];
+        setGuessedNames(updatedGuessedNames);
+        const newScore = updatedGuessedNames.length;
+        setScore(newScore);
+
+        if (newScore >= cohortNames.length) {
+          finishRound(newScore, cohortNames.length, "complete");
+          return;
         }
+
+        const displayNames = newMatches
+          .map((name) => name.charAt(0).toUpperCase() + name.slice(1))
+          .join(", ");
+        addBotMessage(
+          `✅ Nice! You found ${displayNames}. Current score: ${newScore}/${cohortNames.length}.`
+        );
       } else {
-        addBotMessage(`❌ Not quite! "${userMessages[0].text}" doesn't seem to be in that group. Try another name!`);
+        addBotMessage(`⚠️ No new names matched ${selectedCohort}. Keep going!`);
       }
     }
   };
@@ -143,21 +246,32 @@ export default function App() {
     addNewMessage(newMessages);
   }, []);
 
-  // Helper function to render seconds into a pretty MM:SS layout
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-  };
-
   return (
     <SafeAreaProvider>
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
-        
-        {/* Render the header bar with the active timer if the game is running */}
-        {gameState !== -1 && (
-          <View style={{ padding: 15, backgroundColor: '#f0f0f0', alignItems: 'center', borderBottomWidth: 1, borderColor: '#ddd' }}>
-            <Text style={{ fontSize: 18, fontWeight: 'bold', color: timeLeft <= 15 ? 'red' : 'black' }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+        {gameState === 0 && (
+          <View
+            style={{
+              padding: 15,
+              backgroundColor: "#f0f0f0",
+              alignItems: "center",
+              borderBottomWidth: 1,
+              borderColor: "#ddd",
+            }}
+          >
+            <Text style={{ fontSize: 16, fontWeight: "600", marginBottom: 4 }}>
+              Cohort: {selectedCohort.charAt(0).toUpperCase() + selectedCohort.slice(1)}
+            </Text>
+            <Text style={{ fontSize: 16, fontWeight: "600", marginBottom: 4 }}>
+              Score: {score}/{getCohortNameCount(selectedCohort)}
+            </Text>
+            <Text
+              style={{
+                fontSize: 18,
+                fontWeight: "bold",
+                color: timeLeft <= 15 ? "red" : "black",
+              }}
+            >
               ⏱️ Time Remaining: {formatTime(timeLeft)}
             </Text>
           </View>
@@ -175,7 +289,7 @@ export default function App() {
           }}
           renderUsernameOnMessage={true}
         />
-      </SafeAreaView> 
+      </SafeAreaView>
     </SafeAreaProvider>
   );
 }
